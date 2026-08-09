@@ -329,6 +329,8 @@ label.ck input:checked ~ .tx span{color:var(--stone)}
   flex:none;width:16px;padding-top:3px}
 .ir b{display:block;font-size:16px;font-weight:500;line-height:1.5}
 .ir span{display:block;font-size:14px;font-weight:500;color:var(--mute);line-height:1.5}
+.rev{margin-top:var(--s-xl);padding-top:var(--s-md);border-top:1px solid var(--hair-soft);
+  font-size:12px;font-weight:500;color:var(--stone)}
 
 /* ── 넓은 화면: 좌측 고정 락업 + 세로 탭, 우측 본문 ── */
 @media (min-width:1000px){
@@ -408,6 +410,8 @@ label.ck input:checked ~ .tx span{color:var(--stone)}
 </div>
 
 <script>
+const REV='2026.08.09';
+
 /* ══ 상태 ══ */
 const S = { type:null, injury:null, scale:null, when:null, prod:null, work:null, ord:null, side:null, spread:null, target:null, found:null, harm:null, flags:[], org:[] };
 let stack = [], node = 'type';
@@ -945,7 +949,8 @@ function renderQ(){
       '<div class="ir"><em>1</em><div><b>판단보다 사실 확인이 먼저입니다</b><span>원인과 귀책은 관계기관 조사와 유관부서 검토로 정해집니다. 현장에서는 확인된 사실과 증빙 자료를 확보하는 것이 중요합니다.</span></div></div>'+
       '<div class="ir"><em>2</em><div><b>조치 전 원래 상태를 남기는 것이 중요합니다</b><span>정리하거나 조치한 뒤에는 당시 상태를 다시 확인할 수 없습니다. 촬영이 먼저입니다.</span></div></div>'+
       '<div class="ir"><em>3</em><div><b>현장에서는 책임 · 보상과 관련한 언급을 피해주세요</b><span>보상 · 기한 · 처리 방향은 유관부서와의 협의와 검토 후에 정해지는 부분입니다. 현장에서는 언급을 피해주시고, 최대한 빠르게 검토 후 다시 연락드리겠다고 전달해주세요.</span></div></div>'+
-      '</div>');
+      '</div>'+
+      '<div class="rev">개정 '+REV+' · LMD 설치품질팀</div>');
   }
 }
 
@@ -1279,6 +1284,9 @@ function chips(){
 
 /* ── 결과 렌더 ── */
 let TAB='now', BUILT=null, CK={};
+const CKKEY='shot-check';
+try{ const raw=localStorage.getItem(CKKEY); if(raw) CK=JSON.parse(raw)||{}; }catch(e){}
+const saveCK=()=>{ try{ localStorage.setItem(CKKEY, JSON.stringify(CK)); }catch(e){} };
 
 function renderResult(){
   const lv=level();
@@ -1399,7 +1407,8 @@ function panelBody(){
   }
   let h=sub('공유 절차')+reportRows(lv, B.reportExtra);
   h+='<div class="tools"><button class="primary" id="bPrint">인쇄 · PDF 저장</button></div>';
-  h+='<div class="foot"><span>초기 대응 기준. 개별 건의 처리 방향은 유관부서 검토 사항.</span><span>LMD 설치품질팀</span></div>';
+  h+='<div class="foot"><span>초기 대응 기준. 개별 건의 처리 방향은 유관부서 검토 사항.</span>'+
+     '<span>개정 '+REV+' · LMD 설치품질팀</span></div>';
   return h;
 }
 
@@ -1413,7 +1422,7 @@ function bindTabs(){
 }
 function bindPanel(){
   document.querySelectorAll('.ck input').forEach(inp=>inp.onchange=()=>{
-    CK[inp.dataset.id]=inp.checked;
+    CK[inp.dataset.id]=inp.checked; saveCK();
     const n=BUILT.shots.reduce((a,g)=>a+g.items.length,0);
     const d=Object.values(CK).filter(Boolean).length;
     const t=document.querySelector('.tab[data-k="shot"] i'); if(t) t.textContent=d+'/'+n;
@@ -1541,7 +1550,7 @@ function buildPrint(){
     '<table class="ft">'+facts+'</table>'+
     body+
     '<div class="dfoot"><span>초기 대응 기준. 개별 건의 처리 방향은 유관부서 검토 사항.</span>'+
-    '<span>LMD 설치품질팀</span></div>'+
+    '<span>개정 '+REV+' · LMD 설치품질팀</span></div>'+
     '</div>'+
     '<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>'+
     '</body></html>';
@@ -1588,7 +1597,7 @@ function askReset(){
   w.querySelector('.ask-yes').onclick=()=>{
     close();
     Object.keys(S).forEach(k=>S[k]=(k==='flags'||k==='org')?[]:null);
-    CK={}; TAB='now'; stack=[]; node='type'; render();
+    CK={}; saveCK(); TAB='now'; stack=[]; node='type'; render();
   };
 }
 
