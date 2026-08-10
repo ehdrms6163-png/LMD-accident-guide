@@ -65,7 +65,8 @@ button.reset[hidden]{display:none}
 main{padding:var(--s-xl) 24px calc(56px + env(safe-area-inset-bottom))}
 
 /* ── 질문 ── */
-.q{font-size:44px;font-weight:500;letter-spacing:-.035em;margin:0 0 var(--s-md);line-height:.95}
+.q{font-size:44px;font-weight:500;letter-spacing:-.04em;margin:0 0 var(--s-md);line-height:1.05;
+  word-break:keep-all}
 .qs{font-size:16px;font-weight:500;color:var(--mute);margin:0 0 var(--s-xxl);line-height:1.5}
 .opts{display:flex;flex-direction:column;gap:var(--s-xs)}
 button.opt{display:block;width:100%;text-align:left;cursor:pointer;position:relative;
@@ -120,6 +121,7 @@ em.hl{font-style:normal;font-weight:500;color:var(--c,var(--ink))}
 .dept span{font-size:13px;font-weight:500;padding:7px 14px;border-radius:var(--r-full);
   background:var(--c,var(--ink));color:var(--on-ink);white-space:nowrap}
 
+.cmpl{margin-top:var(--s-md);font-size:13px;font-weight:500;color:var(--mute);line-height:1.5}
 .facts{margin:var(--s-lg) 0 0;padding:0;border-top:1px solid var(--hair)}
 .facts>div{display:flex;gap:var(--s-md);align-items:baseline;
   padding:10px 0;border-bottom:1px solid var(--hair-soft)}
@@ -413,7 +415,7 @@ label.ck input:checked ~ .tx span{color:var(--stone)}
 const REV='2026.08.09';
 
 /* ══ 상태 ══ */
-const S = { type:null, injury:null, scale:null, when:null, prod:null, work:null, ord:null, side:null, drill:null, spread:null, target:null, found:null, harm:null, elapsed:null, route:null, flags:[], org:[] };
+const S = { type:null, injury:null, scale:null, when:null, fire119:null, svc:null, prod:null, work:null, ord:null, side:null, drill:null, spread:null, target:null, found:null, harm:null, elapsed:null, route:null, flags:[], org:[] };
 let stack = [], node = 'type';
 
 /* ══ 질문 ══ */
@@ -454,16 +456,19 @@ const Q = {
     ], next:()=>"when"
   },
   when: {
-    q:"현재 어떤 상황입니까", s:"선택에 따라 현장에서 확인할 수 있는 범위가 달라집니다.", key:"when",
+    q:"소방서 · 경찰서 신고 건인가요?", s:"", key:"when",
     opts:[
-      { v:"go",   t:"서비스와 동행 예정 · 동행 중", d:"직접 확인 가능" },
-      { v:"told", t:"서비스가 다녀온 뒤 통보받음", d:"현장 정리 가능성" },
-      { v:"inv",  t:"소방 · 경찰 조사 후", d:"잔존물 수거 가능성" },
-      { v:"self", t:"소방 미출동 · 직접 접수", d:"현장 보존 상태" },
+      { v:"self", t:"신고되지 않음", d:"고객이 자체 진화한 경우" },
+      { v:"rep",  t:"신고된 화재사고" },
+    ], next:()=>"svc"
+  },
+  svc: {
+    q:"서비스센터 방문 후 연락받았나요?", s:"서비스와 동행 예정인 경우 방문 전으로 선택해주세요.", key:"svc",
+    opts:[
+      { v:"pre",  t:"서비스 방문 전" },
+      { v:"post", t:"서비스 방문 후" },
     ], next:()=>"flags"
   },
-
-  /* ── 누수 ── */
   prod: {
     q:"제품 · 작업 구분", s:"선택에 따라 확인할 체결부가 달라집니다.", key:"prod",
     opts:[
@@ -581,7 +586,7 @@ const Q = {
   },
 };
 function order(){
-  if(S.type==="fire") return ["type","injury"].concat(S.injury==="y"?["harm"]:[]).concat(["scale","when","flags"]).concat((S.flags||[]).includes("third")?["org"]:[]);
+  if(S.type==="fire") return ["type","injury"].concat(S.injury==="y"?["harm"]:[]).concat(["scale","when","svc","flags"]).concat((S.flags||[]).includes("third")?["org"]:[]);
   const ex=(S.flags||[]).includes("third")?["org"]:[];
   if(S.type==="body") return ["type","harm","flags"].concat(ex);
   if(S.type==="break") return ["type","target","found","flags"].concat(ex);
@@ -594,39 +599,42 @@ function order(){
 
 /* ══ 화재 촬영 ══ */
 const SHOTS_F = [
-  { g:"전경 — 먼저", need:["go","self","inv","told"], items:[
-    { t:"현장 전경", d:"제품 위치와 주변 공간이 함께 보이게" },
+  { g:"먼저 찍어주세요", must:true, items:[
+    { t:"현장 전경", d:"제품 위치와 주변 공간이 함께 보이게. 여러 방향에서" },
     { t:"탄 범위 전체", d:"어디까지 번졌는지 경계가 보이게" },
-    { t:"피해 부위별 전경 → 근접 순", d:"근접만 찍으면 위치가 확인되지 않습니다" },
+    { t:"피해 부위별 전경 → 근접 순", d:"부위마다 전경을 먼저 찍고 가까이 들어가기" },
+    { t:"명판", d:"모델명 · 제조번호 · 제조연월. 실내기 우선, 실외기는 타서 없어졌을 수 있음" },
   ]},
-  { g:"결선부", need:["go","self"], soft:["told"], items:[
-    { t:"결선부 잔존 여부", d:"타서 없어졌거나 수거된 경우 아래 항목 생략" },
+  { g:"결선부", must:true, items:[
+    { t:"결선부가 남아 있는지", d:"타서 없어졌거나 수거된 경우 그 사실만 기록" },
     { t:"결선 방법", d:"압착슬리브 / 꼬임 설치 / 커넥터 — 판단 없이 보이는 대로" },
+    { t:"전선이 끊어지거나 녹은 자리와 결선부 사이 거리", d:"떨어져 있으면 줄자를 대고 촬영" },
+  ]},
+  { g:"주변 상태 · 증거물", must:true, items:[
+    { t:"실외기 주변에 쌓인 물건 · 통풍 상태", d:"실외기실 루버가 열려 있는지 닫혀 있는지 함께" },
+    { t:"멀티콘센트 사용 여부", d:"같은 콘센트에 꽂힌 다른 기기까지 함께" },
+    { t:"같은 집에 설치된 에어컨 대수 · 불난 위치", d:"어느 방 · 어느 기기인지 확인되게" },
+    { t:"타사 에어컨이 있는지", d:"있으면 제조사와 설치 위치까지" },
+    { t:"원인 확인용 증거물이 어디에 있는지", d:"소방 / 경찰 / 서비스 회수 / 현장에 있음 / 폐기" },
+  ]},
+  { g:"결선부 · 추가", items:[
     { t:"결선부 마감", d:"절연테이프 / 열수축튜브 / 마감 없음" },
     { t:"결선부 위치", d:"실외기 전원선 연결부 · 선시공배선 연결부 · 벽체 관통부 · 접속함 내부" },
-    { t:"결선부와 단선 · 용융흔의 거리", d:"이격 시 줄자를 대고 촬영" },
     { t:"전선 변색 · 녹아내림 · 한 곳만 탄 자국", d:"붉은빛 · 푸른빛으로 변색된 부분, 구리가 녹아 방울처럼 뭉친 자국" },
   ]},
-  { g:"발화 부위", need:["go","self","inv","told"], items:[
+  { g:"불이 난 부위", items:[
     { t:"가장 심하게 탄 부위", d:"설치할 때 손댄 곳인지 아닌지 구분되게" },
-    { t:"발화 추정 전선 부위", d:"매립부 / 설치 시 취급 노출부" },
-    { t:"용융흔 전선과 에어컨의 연결 상태", d:"연결부까지 한 프레임에" },
-    { t:"동일 경로상 타 배선", d:"전등 · 통신 · 소방 배선" },
+    { t:"불이 시작된 것으로 보이는 전선 부위", d:"벽 속 매립부 / 설치할 때 손댄 노출부" },
+    { t:"끊어진 전선이 에어컨과 이어진 상태", d:"연결부까지 한 화면에 들어오게" },
+    { t:"같은 경로를 지나는 다른 배선", d:"전등 · 통신 · 소방 배선" },
     { t:"에어컨 외에 탄 곳" },
-    { t:"연소 확산 흔적", d:"그을음 방향이 판독되게 전경" },
+    { t:"불이 번져나간 흔적", d:"그을음이 어느 방향으로 났는지 보이게" },
   ]},
-  { g:"사용 · 관리 상태", need:["go","self","inv","told"], items:[
-    { t:"전선 눌림 · 꺾임 및 압박원", d:"가구 등 압박원까지 함께" },
-    { t:"분진 퇴적 · 습기 · 부식", d:"접속함 내부는 개방 후 별도" },
+  { g:"사용 · 관리 상태", items:[
+    { t:"전선이 눌리거나 꺾인 곳", d:"누르고 있는 가구 등이 함께 보이게" },
+    { t:"먼지 쌓임 · 습기 · 녹", d:"접속함 안쪽은 열고 따로 촬영" },
     { t:"기판 보호덮개 상태" },
-    { t:"동일 콘센트 타 기기 접속" },
-    { t:"실외기 주변 적치 · 통풍 상태" },
-    { t:"임의 시공 · 교체 흔적", d:"배선 증설, 콘센트 교체, 자가 분해" },
-  ]},
-  { g:"제품 · 잔존물", need:["go","self","inv","told"], items:[
-    { t:"명판 (모델명 · 제조번호 · 제조연월)", d:"실내기 우선. 실외기는 타서 없어졌을 수 있음" },
-    { t:"동일 세대 설치 대수 · 발화 기기 위치" },
-    { t:"잔존물 유무 및 소재", d:"소방 / 경찰 / 서비스 회수 / 현장 잔류 / 폐기" },
+    { t:"고객이 손댄 흔적", d:"배선 늘림, 콘센트 교체, 직접 분해" },
   ]},
 ];
 
@@ -706,13 +714,13 @@ const SAY_F = [
   { id:"intro", when:"첫 대면", lines:[
     "안녕하십니까. 해당 지역의 설치작업을 맡고 있는 LG전자 설치 협력사 ○○물류 ○○○입니다. 사고 접수되어 현장 확인차 방문했습니다.",
     "관계 문의 시 — 확인한 내용은 유관부서 담당자를 통해 검토될 예정입니다.",
-  ], no:"\"죄송합니다\"만 단독으로 쓰면 귀책을 인정한 것으로 읽힐 수 있습니다. \"불편을 드려 죄송합니다\"처럼 대상을 한정해주세요.", show:["go","self","told"] },
+  ], no:"\"죄송합니다\"만 단독으로 쓰면 귀책을 인정한 것으로 읽힐 수 있습니다. \"불편을 드려 죄송합니다\"처럼 대상을 한정해주세요.", show:["self","rep"] },
   { id:"injury", when:"인명피해 발생 건 첫 응대", lines:[
     "지금 상태는 어떠신지요. 병원은 어디로 가셨습니까.",
   ], no:"상태 확인이 우선입니다. 절차 · 보험 · 조사 안내를 먼저 꺼내지 말아주세요.", inj:true },
   { id:"p_inv", when:"방문 목적 — 관계기관 조사 개입 건", lines:[
     "오늘은 현장 상태를 확인하고 기록하기 위해 방문했습니다. 원인은 소방서 · 경찰 등 관계기관 조사 결과로 확인되는 부분입니다.",
-  ], no:"'조사'만 말하면 당사 자체 조사로 오해될 수 있습니다. 어디서 하는 조사인지 함께 말씀해주세요.", show:["inv","go","told"] },
+  ], no:"'조사'만 말하면 당사 자체 조사로 오해될 수 있습니다. 어디서 하는 조사인지 함께 말씀해주세요.", show:["rep"] },
   { id:"p_self", when:"방문 목적 — 소방 미출동 건", lines:[
     "오늘은 현장 상태를 확인하고 기록하기 위해 방문했습니다. 서비스 점검 결과와 당사 점검 결과를 종합해 확인이 진행됩니다.",
   ], no:"방문 목적은 확인과 기록까지만 말씀해주세요.", show:["self"] },
@@ -726,12 +734,12 @@ const SAY_F = [
     "설치하실 때 받으신 문자나 영수증이 남아 있으면 주문번호도 함께 알려주시겠습니까.",
     "제품 번호가 확인되지 않으면 주문하신 분 성함과 연락처로도 조회가 가능합니다.",
   ], no:"설치 이력 조회 목적으로만 말씀해주세요." },
-  { id:"remain", when:"잔존물 소재 확인", lines:[
-    "타신 전선이나 부품이 어디에 있는지 확인하고 싶습니다. 소방에서 가져갔는지, 서비스 쪽에서 회수해 갔는지 알고 계신지요.",
+  { id:"remain", when:"원인 확인용 증거물 확인", lines:[
+    "타거나 남은 전선 · 부품이 어디에 있는지 확인하고 싶습니다. 소방에서 가져갔는지, 서비스 쪽에서 회수해 갔는지 알고 계신지요.",
   ], no:"어디에 있는지만 확인해주세요." },
   { id:"f_inv", when:"\"누구 잘못이냐\" — 관계기관 조사 개입 건", lines:[
     "원인은 소방서 · 경찰 등 관계기관 조사 결과로 확인되는 부분이라 제가 말씀드릴 수 있는 내용이 아닙니다. 오늘 확인한 내용은 그대로 담당 부서에 전달하겠습니다.",
-  ], no:"인정도 부인도 하지 말아주세요. \"그럴 리 없다\", \"저희 쪽은 아닐 겁니다\"도 원인을 단정하는 말입니다.", show:["inv","go","told"] },
+  ], no:"인정도 부인도 하지 말아주세요. \"그럴 리 없다\", \"저희 쪽은 아닐 겁니다\"도 원인을 단정하는 말입니다.", show:["rep"] },
   { id:"f_self", when:"\"누구 잘못이냐\" — 소방 미출동 건", lines:[
     "서비스 점검 결과와 당사 점검 결과를 종합해 담당 부서를 통해 확인한 후 다시 안내드리겠습니다.",
   ], no:"인정도 부인도 하지 말아주세요.", show:["self"] },
@@ -1009,6 +1017,7 @@ function renderQ(){
     }
   });
   const bn=document.getElementById('bNext'); if(bn) bn.onclick=()=>{ stack.push(node); node=d.next(); render(); };
+  fitQ();
   const bb=document.getElementById('bBack'); if(bb) bb.onclick=()=>{ node=stack.pop(); render(); };
   if(node==='type'){
     app.insertAdjacentHTML('beforeend',
@@ -1019,6 +1028,17 @@ function renderQ(){
       '</div>'+
       '<div class="rev">개정 '+REV+' · LMD 설치품질팀</div>');
   }
+}
+
+/* 질문 제목을 한 줄에 맞춤 */
+function fitQ(){
+  const el=document.querySelector('.q');
+  if(!el) return;
+  el.style.whiteSpace='nowrap';
+  let size=44;
+  el.style.fontSize=size+'px';
+  while(el.scrollWidth>el.clientWidth && size>20){ size-=1; el.style.fontSize=size+'px'; }
+  if(el.scrollWidth>el.clientWidth){ el.style.whiteSpace='normal'; }
 }
 
 function renderSoon(){
@@ -1035,7 +1055,8 @@ const T_ROUTE={cust:"고객 직접 알림",svc:"서비스 통보",down:"아랫�
 const T_DRILL={yes:"도면 확인함",none:"도면 없었음",nog:"요청했으나 미수령",no:"요청하지 않음"};
 const T_SPREAD={1:"설치 주변 한정",2:"세대 내 확산",3:"아랫집 · 인접 세대 확산"};
 const T_SCALE={1:"소규모",2:"세대 내 확산",3:"인접 세대 확산"};
-const T_WHEN={go:"서비스 동행",told:"서비스 확인 후 통보",inv:"소방 · 경찰 조사 후",self:"소방 미출동 · 직접 접수"};
+const T_WHEN={self:"미신고 · 고객 자체 진화",rep:"소방 · 경찰 신고 건"};
+const T_SVC={pre:"서비스 방문 전",post:"서비스 방문 후"};
 const T_HARM={none:"병원 이송 없음",hosp:"병원 이송",adm:"입원 · 수술 등 중상해"};
 const T_TARGET={bld:"건물",obj:"일반 대물",car:"차량"};
 const T_FOUND={now:"현장 즉시 확인",late:"퇴거 이후 발견"};
@@ -1103,7 +1124,7 @@ const FLAGNOTE={
 
 /* ── 유형별 구성 ── */
 function buildFire(){
-  const f=S.flags||[], wh=S.when, inj=(S.injury==='y');
+  const f=S.flags||[], wh=S.when, sv=S.svc, inj=(S.injury==='y');
   const B={alerts:[], now:'', shots:[], shotNotes:[], says:[], report:[]};
 
   if(inj) B.alerts.push({t:"인명피해 건", d:"즉시 유선상으로 물류담당자 · 담당 LM에게 사고 사항을 공유한 후 후속 조사를 진행해주세요.", hard:true});
@@ -1115,18 +1136,19 @@ function buildFire(){
     row('','고객 인적사항 · 모델명 · 제조번호')]);
   n+=sub('확보')+box([
     row('1순위','실내기 명판의 모델명 · 제조번호','실외기는 타서 없어졌을 수 있음'),
-    (wh==='told'?row('서비스 통보 건','통보 시점에 제조번호 동시 요청','이후 재요청이 어려움'):''),
+    (sv==='post'?row('서비스 방문 후 건','SM 촬영 자료 요청','현장이 정리되었을 수 있습니다. 통보 시점에 사진과 제조번호를 함께 요청해주세요'):''),
     row('대조용','주문자 성명 · 연락처','배우자 명의 포함'),
     row('가능한 경우','설치 주문번호','고객 보유 문자 · 영수증에서 확인되면 조회가 빠름'),
     row('확보 불가 시','해당 사실을 그대로 공유')])+
     note('제품에 설치 스티커가 부착되어 있더라도 당사 설치 여부는 전산 확인이 필요합니다. 판토스 설치 여부는 유관부서 확인을 통해 확정해야 합니다.');
   B.now=n;
 
-  if(wh==='inv') B.shotNotes.push('조사기관이 잔존물을 수거한 경우 결선부는 확인이 어렵습니다. 탄 흔적은 남아 있으므로 나머지는 그대로 확인해주세요.');
-  if(wh==='self') B.shotNotes.push('소방 미출동 건은 현장이 보존된 상태로, 이후 원인 확인의 유일한 자료가 됩니다. 규모와 무관하게 촬영 후 공유해주세요.');
-  if(wh==='told') B.shotNotes.push('현장이 정리되었을 수 있습니다. 확인되지 않는 항목은 서비스 점검 자료로 확보해야 하므로 그 사실을 공유해주세요.');
-  SHOTS_F.filter(g=>g.need.includes(wh)||(g.soft||[]).includes(wh)).forEach(g=>{
-    B.shots.push({g:g.g, n:(g.soft||[]).includes(wh)?'확인 가능한 범위에서':'', items:g.items});
+  if(wh==='rep') B.shotNotes.push('소방 · 경찰이 원인 확인용 증거물을 가져갔을 수 있습니다. 결선부가 없으면 그 사실만 기록하고, 탄 흔적은 남아 있으므로 나머지는 그대로 확인해주세요.');
+  if(wh==='self') B.shotNotes.push('신고되지 않은 건은 현장이 남아 있는 상태로, 이후 원인 확인의 유일한 자료가 됩니다. 규모와 무관하게 촬영 후 공유해주세요.');
+  if(sv==='post') B.shotNotes.push('서비스가 다녀간 뒤라 현장이 정리되었을 수 있습니다. 확인되지 않는 항목은 SM 촬영 자료를 요청해 함께 공유해주세요.');
+  SHOTS_F.forEach(g=>{
+    const soft = (wh==='rep' && g.g.indexOf('결선부')===0) || sv==='post';
+    B.shots.push({g:g.g, must:g.must, n:soft?'확인 가능한 범위에서':'', items:g.items});
   });
 
   B.says=SAY_F.filter(s=>{
@@ -1136,7 +1158,7 @@ function buildFire(){
     if(s.show) return s.show.includes(wh);
     return true;
   });
-  B.reportExtra = wh==='inv' ? ' · 조사 진행 여부와 담당 기관' : '';
+  B.reportExtra = (wh==='rep' ? ' · 조사 진행 여부와 담당 기관' : '') + (sv==='post' ? ' · SM 촬영 자료' : '');
   return B;
 }
 
@@ -1350,7 +1372,7 @@ function reportRows(lv, extra){
     row('공유 범위',scope().t,scope().d),
     row('시점',lv.t+(lv.h?' · '+lv.h:'')),
     row('함께 제출','촬영본 · 영상 전체'+(extra||'')),
-    row('즉시 통보', S.type==='fire' ? '잔존물 폐기 · 현장 정리 예정이 확인되는 경우'
+    row('즉시 통보', S.type==='fire' ? '증거물 폐기 · 현장 정리 예정이 확인되는 경우'
         : S.type==='body' ? '입원 · 수술 · 진단서 발급 등 상태 변화가 확인되는 경우. 진료 결과 회신 시 포함'
         : S.type==='break' ? '고객이 즉시 복구 · 금액을 요구하거나 확대 우려가 있는 경우'
         : '조치로 해소되지 않거나 당사 범위를 넘는 원인이 확인되는 경우'),
@@ -1365,7 +1387,7 @@ function chips(){
   if(S.type==='fire'){
     c.push(['규모', T_SCALE[S.scale]]);
     c.push(['인명피해', S.injury==='y' ? (T_HARM[S.harm]||'있음') : '없음']);
-    c.push(['확인 시점', T_WHEN[S.when]]);
+    c.push(['신고 여부', T_WHEN[S.when]], ['서비스 방문', T_SVC[S.svc]]);
   } else if(S.type==='water'){
     c.push(['제품 · 작업', T_PROD[S.prod]+(S.prod==='work'&&T_WORK[S.work]?' · '+T_WORK[S.work]:'')]);
     if(S.prod==='work') c.push(['주문 연계', {y:'주문 포함',n:'단독 작업','?':'미확인'}[S.ord]]);
@@ -1384,7 +1406,7 @@ function chips(){
 }
 
 /* ── 결과 렌더 ── */
-let TAB='now', BUILT=null, CK={};
+let TAB='now', BUILT=null, CK={}, MORE=false;
 const CKKEY='shot-check';
 try{ const raw=localStorage.getItem(CKKEY); if(raw) CK=JSON.parse(raw)||{}; }catch(e){}
 const saveCK=()=>{ try{ localStorage.setItem(CKKEY, JSON.stringify(CK)); }catch(e){} };
@@ -1401,6 +1423,7 @@ function renderResult(){
     '<div class="d">'+lines(lv.d)+'</div>'+
     '<div class="dept"><b>공유 대상</b>'+DEPT.slice(0,scope().n).map(x=>
       '<span>'+esc(x)+'</span>').join('')+'</div>'+
+    ((S.type==='fire'||S.type==='body')?'<div class="cmpl">정보보고의 경우 이 내용과는 별도로 Compliance팀 가이드를 참고하여 주시기 바랍니다.</div>':'')+
     '<dl class="facts">'+chips().map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>'+
   '</div>';
 
@@ -1424,7 +1447,7 @@ const ACT={
   p_self:"방문 목적을 설명합니다",
   photo:"촬영 전 양해를 구합니다",
   no:"제품 번호 · 주문번호 · 연락처를 확보합니다",
-  remain:"잔존물이 어디 있는지 확인합니다",
+  remain:"원인 확인용 증거물이 어디에 있는지 확인합니다",
   ins:"화재보험 청구 절차를 안내합니다",
   end:"확인한 내용을 정리하고 마무리합니다",
   stop:"밸브를 잠그고 조치 전 상태를 촬영합니다",
@@ -1478,18 +1501,28 @@ function panelBody(){
       '<span id="pLeft">'+(dn===tot?'모두 확인':(tot-dn)+'개 남음')+'</span></div>'+
       '<div class="pb"><i id="pBar" style="width:'+(tot?dn/tot*100:0)+'%"></i></div></div>';
     B.shotNotes.forEach(n=>h+=note(n));
-    let i=0, gi=0;
-    B.shots.forEach(g=>{
+    let i=0, gi=0, opened=false;
+    const must=B.shots.filter(g=>g.must), more=B.shots.filter(g=>!g.must);
+    const render1=g=>{
       const ids=g.items.map((_,k)=>'c'+(i+k));
       const gd=ids.filter(x=>CK[x]).length;
-      h+=grp(g.g, g.n, ++gi, gd+'/'+g.items.length, ids.join(','));
-      h+='<div class="box">'+g.items.map(it=>{
+      let r=grp(g.g, g.n, ++gi, gd+'/'+g.items.length, ids.join(','));
+      r+='<div class="box">'+g.items.map(it=>{
         const id='c'+(i++);
         return '<label class="ck"><input type="checkbox" data-id="'+id+'"'+(CK[id]?' checked':'')+
           '><span class="bx"></span><span class="tx"><b>'+esc(it.t)+'</b>'+
           (it.d?'<span>'+esc(it.d)+'</span>':'')+'</span></label>';
       }).join('')+'</div>';
-    });
+      return r;
+    };
+    must.forEach(g=>{ h+=render1(g); });
+    if(more.length){
+      const mn=more.reduce((a,g)=>a+g.items.length,0);
+      h+='<details class="more"'+(MORE?' open':'')+'><summary>'+
+        (must.length?'여유가 되면 추가로 · '+mn+'개':'추가 확인 항목 · '+mn+'개')+'</summary><div>';
+      more.forEach(g=>{ h+=render1(g); });
+      h+='</div></details>';
+    }
     h+=note('목록에 없더라도 특이한 부분은 모두 촬영해주세요. 판단은 하지 않습니다.');
     return h;
   }
@@ -1525,6 +1558,8 @@ function bindTabs(){
   });
 }
 function bindPanel(){
+  const dt=document.querySelector('details.more');
+  if(dt) dt.ontoggle=()=>{ MORE=dt.open; };
   document.querySelectorAll('.ck input').forEach(inp=>inp.onchange=()=>{
     CK[inp.dataset.id]=inp.checked; saveCK();
     const n=BUILT.shots.reduce((a,g)=>a+g.items.length,0);
@@ -1628,6 +1663,7 @@ function buildPrint(){
   '.flist li b{display:block;font-size:10pt;font-weight:500}'+
   '.flist li b i{font-style:normal;color:#707072;font-size:8.5pt}'+
   '.flist li span{display:block;font-size:9pt;color:#707072}'+
+  '.cmpl{margin-top:2mm;font-size:9pt;color:#707072}'+
   '.dept{display:flex;flex-wrap:wrap;align-items:center;gap:1.5mm;margin:2mm 0 0;padding:0;font-size:9pt}'+
   '.dept b{color:#707072;font-weight:400;margin-right:1mm}'+
   '.dept span{padding:.8mm 2mm;border:1px solid #111;color:#111;font-weight:500}'+
