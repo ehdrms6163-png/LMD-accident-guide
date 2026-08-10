@@ -115,10 +115,10 @@ em.hl{font-style:normal;font-weight:500;color:var(--c,var(--ink))}
 .sign .ic{margin-top:0}
 .sign .lvl{margin-top:0}
 .sign .d{font-size:16px;font-weight:500;line-height:1.5;color:var(--ash);margin-top:var(--s-lg);text-wrap:pretty}
-.dept{display:flex;flex-wrap:wrap;gap:var(--s-sm);margin-top:var(--s-lg)}
+.dept{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-sm);margin-top:var(--s-lg)}
+.dept b{font-size:13px;font-weight:500;color:var(--mute);margin-right:var(--s-xs)}
 .dept span{font-size:13px;font-weight:500;padding:7px 14px;border-radius:var(--r-full);
-  background:var(--canvas);color:var(--stone);white-space:nowrap}
-.dept span.on{background:var(--c,var(--ink));color:var(--on-ink)}
+  background:var(--c,var(--ink));color:var(--on-ink);white-space:nowrap}
 
 .facts{margin:var(--s-lg) 0 0;padding:0;border-top:1px solid var(--hair)}
 .facts>div{display:flex;gap:var(--s-md);align-items:baseline;
@@ -413,7 +413,7 @@ label.ck input:checked ~ .tx span{color:var(--stone)}
 const REV='2026.08.09';
 
 /* ══ 상태 ══ */
-const S = { type:null, injury:null, scale:null, when:null, prod:null, work:null, ord:null, side:null, spread:null, target:null, found:null, harm:null, flags:[], org:[] };
+const S = { type:null, injury:null, scale:null, when:null, prod:null, work:null, ord:null, side:null, drill:null, spread:null, target:null, found:null, harm:null, elapsed:null, route:null, flags:[], org:[] };
 let stack = [], node = 'type';
 
 /* ══ 질문 ══ */
@@ -449,8 +449,8 @@ const Q = {
     q:"화재 규모", s:"애매한 경우에는 더 큰 구분으로 선택해주세요.", key:"scale",
     opts:[
       { v:1, t:"소규모", d:"제품만 탄 경우 · 제품 주변 일부만 그을린 경우" },
-      { v:2, t:"세대 내 확산", d:"벽면 · 천장 · 바닥 · 가재도구까지 번진 경우. 연기 · 그을음 · 수침(물에 젖음) 피해가 있으면 포함" },
-      { v:3, t:"인접 세대 확산", d:"상하층 · 옆세대까지 번진 경우. 연기 · 그을음 · 수침(물에 젖음) 피해가 있으면 포함" },
+      { v:2, t:"세대 내 확산", d:"벽면 · 천장 · 바닥 · 가재도구까지 번진 경우. 연기 · 그을음 · 물에 젖은 피해가 있으면 포함" },
+      { v:3, t:"인접 세대 확산", d:"상하층 · 옆세대까지 번진 경우. 연기 · 그을음 · 물에 젖은 피해가 있으면 포함" },
     ], next:()=>"when"
   },
   when: {
@@ -467,10 +467,12 @@ const Q = {
   prod: {
     q:"제품 · 작업 구분", s:"선택에 따라 확인할 체결부가 달라집니다.", key:"prod",
     opts:[
-      { v:"dish",  t:"식기세척기", d:"어댑터 + 연장호스 + 아쿠아스탑 / Y커넥터 · 매립배수관" },
-      { v:"water", t:"정수기 · 정수기냉장고", d:"어댑터 / 배수튜빙선" },
-      { v:"wash",  t:"세탁기 · 워시타워", d:"급수부 / 배수부" },
-      { v:"robot", t:"로봇청소기", d:"어댑터 / 배수튜빙선" },
+      { v:"ac",    t:"에어컨" },
+      { v:"dish",  t:"식기세척기" },
+      { v:"water", t:"정수기 · 정수기냉장고" },
+      { v:"wash",  t:"세탁기 · 워시타워" },
+      { v:"robot", t:"로봇청소기" },
+      { v:"tv",    t:"TV" },
       { v:"work",  t:"기타 작업", d:"배수구 클리닝 · 배수통 교체 · 세탁실 클리닝 · 배수트랩" },
     ],
     next: v => v==="work" ? "work" : "side"
@@ -490,15 +492,43 @@ const Q = {
       { v:"y", t:"제품 설치 주문에 포함된 작업" },
       { v:"n", t:"단독 작업", d:"주문 없이 작업만 진행" },
       { v:"?", t:"확인되지 않음", d:"단독 작업 기준으로 처리" },
-    ], next:()=>"spread"
+    ], next:()=>"elapsed"
   },
   side: {
     q:"누수 계통", s:"현장에서 확인되는 대로 선택해주세요.", key:"side",
     opts:[
-      { v:"in",  t:"급수" },
-      { v:"out", t:"배수" },
-      { v:"both",t:"급수 · 배수 모두" },
-      { v:"?",   t:"확인되지 않음", d:"양쪽 모두 확인" },
+      { v:"in",   t:"급수", only:["dish","water","wash","robot"] },
+      { v:"out",  t:"배수", only:["ac","dish","water","wash","robot"] },
+      { v:"both", t:"급수 · 배수 모두", only:["dish","water","wash","robot"] },
+      { v:"hole", t:"타공", d:"벽 타공 중 배관 손상" },
+      { v:"seal", t:"마감 미흡", d:"타공부 실리콘 등 마감 불량" },
+    ],
+    next: v => (v==="hole") ? "drill" : "elapsed"
+  },
+  drill: {
+    q:"타공 전 도면을 확인했습니까", s:"", key:"drill",
+    opts:[
+      { v:"yes",  t:"확인함" },
+      { v:"none", t:"확인 안 함 — 도면이 없었음", d:"관리사무소에 도면 미보유" },
+      { v:"nog",  t:"확인 안 함 — 요청했으나 받지 못함" },
+      { v:"no",   t:"확인 안 함 — 요청하지 않음" },
+    ], next:()=>"elapsed"
+  },
+  elapsed: {
+    q:"설치 후 얼마나 지났습니까", s:"설치 시점과 누수 발생 사이의 간격이 판단에 사용됩니다.", key:"elapsed",
+    opts:[
+      { v:"m1",  t:"1개월 이내" },
+      { v:"y1",  t:"1개월 ~ 1년" },
+      { v:"y1p", t:"1년 초과" },
+      { v:"?",   t:"확인되지 않음", d:"설치일이 확인되지 않는 경우" },
+    ], next:()=>"route"
+  },
+  route: {
+    q:"어떻게 접수되었습니까", s:"", key:"route",
+    opts:[
+      { v:"cust", t:"고객이 직접 알림" },
+      { v:"svc",  t:"서비스가 다녀온 뒤 통보" },
+      { v:"down", t:"아랫집 · 관리사무소가 알림" },
     ], next:()=>"spread"
   },
   spread: {
@@ -556,8 +586,9 @@ function order(){
   if(S.type==="body") return ["type","harm","flags"].concat(ex);
   if(S.type==="break") return ["type","target","found","flags"].concat(ex);
   if(S.type==="water") return (S.prod==="work"
-    ? ["type","prod","work","ord","spread","flags"]
-    : ["type","prod","side","spread","flags"]).concat(ex);
+    ? ["type","prod","work","ord","elapsed","route","spread","flags"]
+    : ["type","prod","side"].concat(S.side==="hole"?["drill"]:[])
+        .concat(["elapsed","route","spread","flags"])).concat(ex);
   return ["type"];
 }
 
@@ -565,23 +596,23 @@ function order(){
 const SHOTS_F = [
   { g:"전경 — 먼저", need:["go","self","inv","told"], items:[
     { t:"현장 전경", d:"제품 위치와 주변 공간이 함께 보이게" },
-    { t:"소훼 범위 전체", d:"어디까지 번졌는지 경계가 보이게" },
+    { t:"탄 범위 전체", d:"어디까지 번졌는지 경계가 보이게" },
     { t:"피해 부위별 전경 → 근접 순", d:"근접만 찍으면 위치가 확인되지 않습니다" },
   ]},
   { g:"결선부", need:["go","self"], soft:["told"], items:[
-    { t:"결선부 잔존 여부", d:"소실 · 수거된 경우 아래 항목 생략" },
-    { t:"결선 방법", d:"압착슬리브 / 꼬임 직결 / 커넥터 — 판단 없이 보이는 대로" },
+    { t:"결선부 잔존 여부", d:"타서 없어졌거나 수거된 경우 아래 항목 생략" },
+    { t:"결선 방법", d:"압착슬리브 / 꼬임 설치 / 커넥터 — 판단 없이 보이는 대로" },
     { t:"결선부 마감", d:"절연테이프 / 열수축튜브 / 마감 없음" },
     { t:"결선부 위치", d:"실외기 전원선 연결부 · 선시공배선 연결부 · 벽체 관통부 · 접속함 내부" },
     { t:"결선부와 단선 · 용융흔의 거리", d:"이격 시 줄자를 대고 촬영" },
-    { t:"전선 변색 · 용융 · 국부 탄화", d:"적자색 · 청록색 변색, 용융 망울" },
+    { t:"전선 변색 · 녹아내림 · 한 곳만 탄 자국", d:"붉은빛 · 푸른빛으로 변색된 부분, 구리가 녹아 방울처럼 뭉친 자국" },
   ]},
   { g:"발화 부위", need:["go","self","inv","told"], items:[
-    { t:"소훼 집중 부위", d:"설치 시 작업 부위인지 비취급 부위인지 구분되게" },
+    { t:"가장 심하게 탄 부위", d:"설치할 때 손댄 곳인지 아닌지 구분되게" },
     { t:"발화 추정 전선 부위", d:"매립부 / 설치 시 취급 노출부" },
     { t:"용융흔 전선과 에어컨의 연결 상태", d:"연결부까지 한 프레임에" },
     { t:"동일 경로상 타 배선", d:"전등 · 통신 · 소방 배선" },
-    { t:"에어컨 외 소훼부" },
+    { t:"에어컨 외에 탄 곳" },
     { t:"연소 확산 흔적", d:"그을음 방향이 판독되게 전경" },
   ]},
   { g:"사용 · 관리 상태", need:["go","self","inv","told"], items:[
@@ -593,7 +624,7 @@ const SHOTS_F = [
     { t:"임의 시공 · 교체 흔적", d:"배선 증설, 콘센트 교체, 자가 분해" },
   ]},
   { g:"제품 · 잔존물", need:["go","self","inv","told"], items:[
-    { t:"명판 (모델명 · 제조번호 · 제조연월)", d:"실내기 우선. 실외기는 소실 가능성" },
+    { t:"명판 (모델명 · 제조번호 · 제조연월)", d:"실내기 우선. 실외기는 타서 없어졌을 수 있음" },
     { t:"동일 세대 설치 대수 · 발화 기기 위치" },
     { t:"잔존물 유무 및 소재", d:"소방 / 경찰 / 서비스 회수 / 현장 잔류 / 폐기" },
   ]},
@@ -639,6 +670,29 @@ const OUT_BY_PROD = {
     { t:"배수 트랩 주변 역류 흔적" },
   ],
 };
+const AC_OUT = [
+  { t:"드레인호스 체결부", d:"실내기 연결부 · 중간 이음부" },
+  { t:"U트랩 형성 상태", d:"트랩 유무 · 물 고임 여부" },
+  { t:"배수 구배", d:"역구배 · 처짐 구간이 보이게" },
+  { t:"드레인 끝단", d:"배수구 삽입 상태 · 이탈 여부" },
+  { t:"단열 · 보온재 마감", d:"결로 발생 여부" },
+];
+const HOLE_SHOTS = [
+  { t:"타공 위치 전경", d:"세대 내 어느 벽면인지 확인되게" },
+  { t:"타공부 근접", d:"구멍 크기 · 관통 깊이" },
+  { t:"손상된 배관", d:"우수관 / 공용 드레인관 / 급수관 / 난방배관 — 판단 없이 보이는 대로" },
+  { t:"누수 지점과 타공부의 거리", d:"이격 시 줄자를 대고 촬영" },
+  { t:"아랫집 · 인접 세대 유입 흔적", d:"확인이 가능한 경우" },
+  { t:"관리사무소 확인 사항", d:"담당자 성함 · 연락처. 도면 보유 여부" },
+  { t:"공용부 조치 주체", d:"당사 조치 / 관리사무소 지정 업체 / 미조치 — 조치 전후 촬영" },
+];
+const SEAL_SHOTS = [
+  { t:"타공부 마감 상태 전경", d:"실내측 · 실외측 양쪽" },
+  { t:"실리콘 마감 근접", d:"들뜸 · 균열 · 미시공 구간이 보이게" },
+  { t:"배관 관통부 틈", d:"배관과 벽면 사이 간격" },
+  { t:"물 유입 경로 흔적", d:"벽면 물 자국 · 곰팡이 · 변색" },
+  { t:"외벽측 상태", d:"확인이 가능한 경우. 불가하면 그 사실을 기록" },
+];
 const WORK_SHOTS = [
   { t:"작업 전 상태", d:"보유하고 있는 경우. 없으면 '없음'으로 기록하고 공유" },
   { t:"작업 부위 전경" },
@@ -651,7 +705,7 @@ const WORK_SHOTS = [
 const SAY_F = [
   { id:"intro", when:"첫 대면", lines:[
     "안녕하십니까. 해당 지역의 설치작업을 맡고 있는 LG전자 설치 협력사 ○○물류 ○○○입니다. 사고 접수되어 현장 확인차 방문했습니다.",
-    "관계 문의 시 — 확인한 내용은 상위부서 담당자를 통해 검토될 예정입니다.",
+    "관계 문의 시 — 확인한 내용은 유관부서 담당자를 통해 검토될 예정입니다.",
   ], no:"\"죄송합니다\"만 단독으로 쓰면 귀책을 인정한 것으로 읽힐 수 있습니다. \"불편을 드려 죄송합니다\"처럼 대상을 한정해주세요.", show:["go","self","told"] },
   { id:"injury", when:"인명피해 발생 건 첫 응대", lines:[
     "지금 상태는 어떠신지요. 병원은 어디로 가셨습니까.",
@@ -738,6 +792,10 @@ const SAY_W = [
     "설치 이력을 조회해야 해서 제품 번호를 확인하겠습니다.",
     "설치하실 때 받으신 문자나 영수증이 남아 있으면 주문번호도 함께 알려주시겠습니까.",
   ], no:"설치 이력 조회 목적으로만 말씀해주세요." },
+  { id:"hist", when:"설치 후 시간이 지난 건 — 이력 청취", lines:[
+    "설치하신 뒤에 이쪽을 손보거나 다른 작업을 하신 적이 있으신지요.",
+    "언제부터 물이 보이셨는지도 알려주시면 함께 전달하겠습니다.",
+  ], no:"설치 때문이 아니라고 현장에서 단정하지 말아주세요. 들은 내용만 그대로 기록합니다.", late:true },
   { id:"fault", when:"\"누구 잘못이냐 · 설치 잘못 아니냐\"", lines:[
     "지금은 어디서 물이 나왔는지 확인하는 단계입니다. 확인한 내용을 담당 부서에 전달하고, 확인되는 대로 다시 안내드리겠습니다.",
   ], no:"인정도 부인도 하지 말아주세요. 조치했다고 해서 귀책을 인정한 것은 아닙니다." },
@@ -745,6 +803,15 @@ const SAY_W = [
     "혹시 가입하신 화재보험이나 주택종합보험에 일상생활배상책임 특약이 있는지 확인해 주시겠습니까.",
     "아래층 피해는 그 담보로 먼저 처리되는 경우가 있어서, 확인해 두시면 도움이 됩니다.",
   ], no:"가입 여부만 확인해주세요. 청구를 권유하거나 처리 방법을 단정하지 않습니다. 당사 귀책이 확인되면 별도로 진행된다는 점을 함께 안내합니다.", spread3:true },
+  { id:"mgmt", when:"관리사무소가 나온 경우", lines:[
+    "안녕하십니까. 해당 세대 설치작업을 맡은 LG전자 설치 협력사 ○○물류 ○○○입니다.",
+    "확인된 내용은 담당 부서에 전달하고, 처리 방향은 확인되는 대로 다시 안내드리겠습니다.",
+    "담당자분 성함과 연락처를 알려주시면 담당 부서에서 연락드리겠습니다.",
+  ], no:"복구 방법 · 비용 · 일정은 약속하지 말아주세요. 공용배관은 관리사무소가 별도 권리로 청구합니다. 서면 서명은 현장 권한이 없습니다. 담당자 성함 · 연락처는 반드시 확보해주세요.", hole:true },
+  { id:"fix2", when:"관리사무소가 즉시 조치를 요구하는 경우", lines:[
+    "세대 내에서 할 수 있는 응급 조치는 바로 하겠습니다.",
+    "공용배관 쪽은 관리사무소에서 지정하시는 업체로 진행하시는 것이 맞는지 확인 부탁드립니다.",
+  ], no:"당사가 공용부를 조치한 경우 조치 전후를 반드시 촬영하고 조치 내역을 기록해주세요. 관리사무소 지정 업체가 진행한 경우 업체명과 연락처를 확보해주세요.", hole:true },
   { id:"down", when:"아랫집 피해가 발생한 경우", lines:[
     "아래층 피해 범위도 확인이 필요합니다. 연락처를 알려주시면 담당 부서에서 확인 절차를 안내드리겠습니다.",
   ], no:"상대 세대에 보상이나 처리를 약속하지 말아주세요. 접촉 사실과 요구사항만 확인해 공유해주세요.", spread3:true },
@@ -920,7 +987,7 @@ function renderQ(){
   app.innerHTML =
     '<p class="q">'+esc(d.q)+'</p>'+(d.s?'<p class="qs">'+esc(d.s)+'</p>':'<div style="height:14px"></div>')+
     '<div class="opts">'+
-    d.opts.map(o=>'<button class="opt'+(on(o.v)?' on':'')+'" data-v="'+esc(o.v)+'">'+
+    (d.opts.filter(o=>!o.only||o.only.includes(S.prod))).map(o=>'<button class="opt'+(on(o.v)?' on':'')+'" data-v="'+esc(o.v)+'">'+
       '<span class="chk"></span><b>'+esc(o.t)+'</b>'+(o.d?'<span>'+esc(o.d)+'</span>':'')+'</button>').join('')+
     '</div><div class="actions">'+
       (stack.length?'<button class="back" id="bBack">이전</button>':'')+
@@ -960,9 +1027,12 @@ function renderSoon(){
   document.getElementById('bBack').onclick=()=>{ node=stack.pop(); render(); };
 }
 
-const T_PROD={dish:"식기세척기",water:"정수기 · 정수기냉장고",wash:"세탁기 · 워시타워",robot:"로봇청소기",work:"기타 작업"};
+const T_PROD={ac:"에어컨",dish:"식기세척기",water:"정수기 · 정수기냉장고",wash:"세탁기 · 워시타워",robot:"로봇청소기",tv:"TV",work:"기타 작업"};
 const T_WORK={clean:"배수구 클리닝",tank:"배수통 교체",room:"세탁실 클리닝",trap:"배수트랩"};
-const T_SIDE={in:"급수",out:"배수",both:"급수 · 배수",'?':"미확인"};
+const T_SIDE={in:"급수",out:"배수",both:"급수 · 배수",hole:"타공",seal:"마감 미흡",'?':"미확인"};
+const T_ELAPSED={m1:"1개월 이내",y1:"1개월 ~ 1년",y1p:"1년 초과","?":"설치일 미확인"};
+const T_ROUTE={cust:"고객 직접 알림",svc:"서비스 통보",down:"아랫집 · 관리사무소 알림"};
+const T_DRILL={yes:"도면 확인함",none:"도면 없었음",nog:"요청했으나 미수령",no:"요청하지 않음"};
 const T_SPREAD={1:"설치 주변 한정",2:"세대 내 확산",3:"아랫집 · 인접 세대 확산"};
 const T_SCALE={1:"소규모",2:"세대 내 확산",3:"인접 세대 확산"};
 const T_WHEN={go:"서비스 동행",told:"서비스 확인 후 통보",inv:"소방 · 경찰 조사 후",self:"소방 미출동 · 직접 접수"};
@@ -1044,7 +1114,7 @@ function buildFire(){
     row('','화재 규모 — 소규모 / 세대 내 확산 / 인접 세대 확산'),
     row('','고객 인적사항 · 모델명 · 제조번호')]);
   n+=sub('확보')+box([
-    row('1순위','실내기 명판의 모델명 · 제조번호','실외기는 소실 가능성 높음'),
+    row('1순위','실내기 명판의 모델명 · 제조번호','실외기는 타서 없어졌을 수 있음'),
     (wh==='told'?row('서비스 통보 건','통보 시점에 제조번호 동시 요청','이후 재요청이 어려움'):''),
     row('대조용','주문자 성명 · 연락처','배우자 명의 포함'),
     row('가능한 경우','설치 주문번호','고객 보유 문자 · 영수증에서 확인되면 조회가 빠름'),
@@ -1052,7 +1122,7 @@ function buildFire(){
     note('제품에 설치 스티커가 부착되어 있더라도 당사 설치 여부는 전산 확인이 필요합니다. 판토스 설치 여부는 유관부서 확인을 통해 확정해야 합니다.');
   B.now=n;
 
-  if(wh==='inv') B.shotNotes.push('조사기관이 잔존물을 수거한 경우 결선부는 확인이 어렵습니다. 소훼 흔적은 남아 있으므로 나머지는 그대로 확인해주세요.');
+  if(wh==='inv') B.shotNotes.push('조사기관이 잔존물을 수거한 경우 결선부는 확인이 어렵습니다. 탄 흔적은 남아 있으므로 나머지는 그대로 확인해주세요.');
   if(wh==='self') B.shotNotes.push('소방 미출동 건은 현장이 보존된 상태로, 이후 원인 확인의 유일한 자료가 됩니다. 규모와 무관하게 촬영 후 공유해주세요.');
   if(wh==='told') B.shotNotes.push('현장이 정리되었을 수 있습니다. 확인되지 않는 항목은 서비스 점검 자료로 확보해야 하므로 그 사실을 공유해주세요.');
   SHOTS_F.filter(g=>g.need.includes(wh)||(g.soft||[]).includes(wh)).forEach(g=>{
@@ -1077,6 +1147,15 @@ function buildWater(){
   if((S.flags||[]).includes('voc') || (S.flags||[]).includes('third'))
     B.alerts.push({t:"대외 확산 예상 건",
       d:"외부기관 접촉 또는 소비자원 · 법적 대응이 언급된 건입니다. 피해 금액이 ⟪자기부담금 기준⟫ 이하로 예상되더라도 물류 자체 처리 대상이 아닙니다. Line팀을 경유해 LMD 설치품질팀까지 공유합니다."});
+  if(S.elapsed==='y1'||S.elapsed==='y1p'||S.elapsed==='?')
+    B.alerts.push({t:"설치 후 시간이 지난 건",
+      d:"설치 시점과 누수 발생 사이에 간격이 있는 건입니다. 그 사이 다른 작업이나 사용 변경이 있었는지 확인해 함께 공유해주세요. 현장에서 설치 때문인지 아닌지를 단정하지 않습니다."});
+  if(S.route==='svc')
+    B.alerts.push({t:"서비스 통보 건",
+      d:"현장이 이미 정리되었을 수 있습니다. 서비스 점검 결과와 확인되지 않는 항목을 함께 공유해주세요."});
+  if(S.route==='down')
+    B.alerts.push({t:"아랫집 · 관리사무소 통보 건",
+      d:"알린 쪽과 설치 세대가 다릅니다. 설치 세대 방문 동의를 먼저 확인하고, 알린 쪽 담당자 성함 · 연락처를 확보해주세요."});
   if(!(S.flags||[]).includes('voc') && !(S.flags||[]).includes('third'))
     B.alerts.push({t:"규모 판단은 물류에서",
       d:"현장에서는 확인한 내용을 물류에 공유합니다. 피해 규모는 물류에서 1차 확인합니다. 피해 금액이 ⟪자기부담금 기준⟫을 넘을 것으로 예상되면 Line팀 이상으로 공유합니다. 규모 판단이 어려운 경우에도 Line팀을 경유해 유관부서로 공유합니다."});
@@ -1092,11 +1171,13 @@ function buildWater(){
     row('1순위','제품 명판의 모델명 · 제조번호'),
     row('대조용','주문자 성명 · 연락처','배우자 명의 포함'),
     row('가능한 경우','설치 주문번호 · 작업일자','고객 보유 문자 · 영수증에서 확인되면 조회가 빠름'),
+    ((S.elapsed==='y1'||S.elapsed==='y1p'||S.elapsed==='?')?row('경과 건','그 사이 다른 작업 · 사용 변경 유무','고객 진술 그대로 기록'):''),
     (isWork?row('작업 접수 경로','주문 연계 여부 · 접수 경로','제품 설치 주문에 포함된 작업인지, 작업만 단독으로 접수된 건인지'):''),
+    (sd==='hole'?row('타공 건','도면 확인 여부 · 관리사무소 담당자',(T_DRILL[S.drill]||'')+' · 성함과 연락처를 확보해주세요'):''),
     (S.spread===3?row('고객 측 담보','일상생활배상책임 담보 가입 여부','화재보험 · 주택종합보험 특약으로 가입된 경우가 많음. 가입 여부만 확인'):''),
     row('확보 불가 시','해당 사실을 그대로 공유')]);
 
-  B.shotNotes.push('각 단계마다 전경을 먼저 찍고 근접으로 들어가십시오. 근접만 있으면 위치와 범위가 확인되지 않습니다.');
+  B.shotNotes.push('각 단계마다 전경을 먼저 찍고 근접으로 들어가주세요. 근접만 있으면 위치와 범위가 확인되지 않습니다.');
   B.shots.push({g:'조치 전', n:'손대기 전에', items:[
     { t:"실내 전경", d:"누수 위치가 집 안 어디인지 확인되게. 여러 방향에서" },
     { t:"제품 및 주변 설치 상태 전경", d:"제품과 체결부 · 배관이 함께 보이게" },
@@ -1108,27 +1189,35 @@ function buildWater(){
     B.shots.push({g:'작업 부위', n:T_WORK[S.work]||'', items:WORK_SHOTS});
     B.shotNotes.push('기존 설비를 취급하는 작업입니다. 작업 전 상태가 남아 있지 않으면 파손이 작업으로 생긴 것인지 기존 것인지 확인할 방법이 없습니다.');
   } else {
+    if(sd==='hole'){
+      B.shots.push({g:'타공부', items:HOLE_SHOTS});
+      B.shotNotes.push('공용배관 손상은 관리사무소가 별도 권리로 복구 · 배상을 요구합니다. 복구 방법과 비용은 현장에서 약속하지 말아주세요.');
+    }
+    else if(sd==='seal') B.shots.push({g:'마감부', items:SEAL_SHOTS});
+    else if(pr==='ac') B.shots.push({g:'배수부', n:'에어컨', items:AC_OUT});
+    else {
     if(sd==='in'||sd==='both'||sd==='?')
       B.shots.push({g:'급수부', n:T_PROD[pr], items:(IN_BY_PROD[pr]||[]).concat([
         { t:"어댑터 파손 · 균열 · 패킹 상태" },
         { t:"기존 분배기 · 원수 급수부 재체결 지점", d:"당사가 분리 후 재체결한 부분과 벽체 배관의 경계가 보이게" }])});
     if(sd==='out'||sd==='both'||sd==='?')
       B.shots.push({g:'배수부', n:T_PROD[pr], items:OUT_BY_PROD[pr]||[]});
+    }
   }
 
-  B.shots.push({g:'재현', n:'영상', items:[
+  if(sd!=='hole'&&sd!=='seal') B.shots.push({g:'재현', n:'영상', items:[
     { t:"급수 재현", d:"물을 흘리며 누수 지점이 보이도록 영상 촬영", skipIf:'out' },
     { t:"배수 재현", d:"배수 동작 중 누수 · 역류 여부를 영상 촬영" },
     { t:"누수 지점 특정", d:"물이 나오기 시작하는 지점 근접" },
     { t:"재현되지 않는 경우", d:"시도한 조건(급수 · 배수 · 반복 횟수)을 기록" },
   ].filter(x=>!(x.skipIf&&sd===x.skipIf))});
 
-  B.shots.push({g:'배관 · 역류 확인', items:[
+  if(sd!=='hole'&&sd!=='seal') B.shots.push({g:'배관 · 역류 확인', items:[
     { t:"역류 발생 여부", d:"배수구에서 물이 올라오는 상태" },
     { t:"배수구 주변 오염 · 이물", d:"슬러지 · 침전물" },
     { t:"배관 내부", d:"내시경 확인이 가능한 경우. 어려우면 '장비 없음'으로 기록" },
   ]});
-  B.shotNotes.push('매립배수관에서 역류가 확인되면 배관 내부 상태까지 확인해주세요. 배관 내부는 당사 시공 범위 밖의 원인을 확인할 수 있는 유일한 자료입니다.');
+  if(sd!=='hole'&&sd!=='seal') B.shotNotes.push('매립배수관에서 역류가 확인되면 배관 내부 상태까지 확인해주세요. 배관 내부는 당사 시공 범위 밖의 원인을 확인할 수 있는 유일한 자료입니다.');
 
   B.shots.push({g:'조치', items:[
     { t:"조치 내역 기록", d:"무엇을 어떻게 조치했는지. 교체 부품이 있으면 함께" },
@@ -1144,6 +1233,8 @@ function buildWater(){
     if(s.flag) return f.includes(s.flag);
     if(s.spread3) return S.spread===3;
     if(s.solo) return isWork && (S.ord==='n'||S.ord==='?');
+    if(s.hole) return S.side==='hole';
+    if(s.late) return S.elapsed==='y1'||S.elapsed==='y1p'||S.elapsed==='?';
     return true;
   });
   B.reportExtra=' · 조치 내역';
@@ -1158,6 +1249,15 @@ function buildBreak(){
   if((S.flags||[]).includes('voc') || (S.flags||[]).includes('third'))
     B.alerts.push({t:"대외 확산 예상 건",
       d:"외부기관 접촉 또는 소비자원 · 법적 대응이 언급된 건입니다. 피해 금액이 ⟪자기부담금 기준⟫ 이하로 예상되더라도 물류 자체 처리 대상이 아닙니다. Line팀을 경유해 LMD 설치품질팀까지 공유합니다."});
+  if(S.elapsed==='y1'||S.elapsed==='y1p'||S.elapsed==='?')
+    B.alerts.push({t:"설치 후 시간이 지난 건",
+      d:"설치 시점과 누수 발생 사이에 간격이 있는 건입니다. 그 사이 다른 작업이나 사용 변경이 있었는지 확인해 함께 공유해주세요. 현장에서 설치 때문인지 아닌지를 단정하지 않습니다."});
+  if(S.route==='svc')
+    B.alerts.push({t:"서비스 통보 건",
+      d:"현장이 이미 정리되었을 수 있습니다. 서비스 점검 결과와 확인되지 않는 항목을 함께 공유해주세요."});
+  if(S.route==='down')
+    B.alerts.push({t:"아랫집 · 관리사무소 통보 건",
+      d:"알린 쪽과 설치 세대가 다릅니다. 설치 세대 방문 동의를 먼저 확인하고, 알린 쪽 담당자 성함 · 연락처를 확보해주세요."});
   if(!(S.flags||[]).includes('voc') && !(S.flags||[]).includes('third'))
     B.alerts.push({t:"규모 판단은 물류에서",
       d:"현장에서는 확인한 내용을 물류에 공유합니다. 피해 규모는 물류에서 1차 확인합니다. 피해 금액이 ⟪자기부담금 기준⟫을 넘을 것으로 예상되면 Line팀 이상으로 공유합니다. 규모 판단이 어려운 경우에도 Line팀을 경유해 유관부서로 공유합니다."});
@@ -1269,8 +1369,9 @@ function chips(){
   } else if(S.type==='water'){
     c.push(['제품 · 작업', T_PROD[S.prod]+(S.prod==='work'&&T_WORK[S.work]?' · '+T_WORK[S.work]:'')]);
     if(S.prod==='work') c.push(['주문 연계', {y:'주문 포함',n:'단독 작업','?':'미확인'}[S.ord]]);
-    else c.push(['누수 계통', T_SIDE[S.side]]);
-    c.push(['피해 범위', T_SPREAD[S.spread]]);
+    else { c.push(['누수 계통', T_SIDE[S.side]]);
+      if(S.side==='hole') c.push(['도면 확인', T_DRILL[S.drill]]); }
+    c.push(['설치 후 경과', T_ELAPSED[S.elapsed]], ['접수 경로', T_ROUTE[S.route]], ['피해 범위', T_SPREAD[S.spread]]);
   } else if(S.type==='break'){
     c.push(['피해 대상', T_TARGET[S.target]], ['확인 시점', T_FOUND[S.found]]);
   } else if(S.type==='body'){
@@ -1298,8 +1399,8 @@ function renderResult(){
     '<div class="head"><span class="ic">'+(ICON[S.type]||'')+'</span>'+
       '<span class="tt"><b class="kind">'+esc(T_KIND[S.type]||'사고')+'</b></span></div>'+
     '<div class="d">'+lines(lv.d)+'</div>'+
-    '<div class="dept">'+DEPT.map((x,i)=>
-      '<span class="'+(i<scope().n?'on':'')+'">'+esc(x)+'</span>').join('')+'</div>'+
+    '<div class="dept"><b>공유 대상</b>'+DEPT.slice(0,scope().n).map(x=>
+      '<span>'+esc(x)+'</span>').join('')+'</div>'+
     '<dl class="facts">'+chips().map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>'+
   '</div>';
 
@@ -1336,11 +1437,14 @@ const ACT={
   move:"이송 요청이 있으면 동행합니다",
   info:"인적사항과 사고 경위를 확인합니다",
   wit:"목격자를 확보합니다",
-  liab:"고객 측 일상생활배상책임 담보 가입 여부를 확인합니다"
+  liab:"고객 측 일상생활배상책임 담보 가입 여부를 확인합니다",
+  mgmt:"관리사무소 담당자 성함 · 연락처를 확보합니다",
+  hist:"설치 이후 이력을 청취합니다",
+  fix2:"공용부 조치 주체를 확인합니다"
 };
 const SEQ={
   fire:["intro","injury","p_inv","p_self","photo","no","remain","ins","end"],
-  water:["intro","stop","repro","fix","back","no","down","liab","end"],
+  water:["intro","stop","repro","fix","back","mgmt","fix2","no","hist","down","liab","end"],
   break:["intro","photo","late","end"],
   body:["first","move","info","photo","wit","end"]
 };
@@ -1524,9 +1628,9 @@ function buildPrint(){
   '.flist li b{display:block;font-size:10pt;font-weight:500}'+
   '.flist li b i{font-style:normal;color:#707072;font-size:8.5pt}'+
   '.flist li span{display:block;font-size:9pt;color:#707072}'+
-  '.dept{display:flex;flex-wrap:wrap;gap:1.5mm;margin:2mm 0 0;padding:0}'+
-  '.dept span{font-size:9pt;padding:.8mm 2mm;border:1px solid #cacacb;color:#9e9ea0}'+
-  '.dept span.on{border-color:#111;color:#111;font-weight:500}'+
+  '.dept{display:flex;flex-wrap:wrap;align-items:center;gap:1.5mm;margin:2mm 0 0;padding:0;font-size:9pt}'+
+  '.dept b{color:#707072;font-weight:400;margin-right:1mm}'+
+  '.dept span{padding:.8mm 2mm;border:1px solid #111;color:#111;font-weight:500}'+
   '.flow{list-style:none;margin:2mm 0;padding:0;border-top:1px solid #e5e5e5;font-size:10pt}'+
   '.flow li{display:flex;align-items:center;gap:2.5mm;padding:1.4mm 0;border-bottom:1px solid #e5e5e5}'+
   '.flow li em{font-style:normal;flex:none;color:#707072;font-size:8.5pt;background:none!important;'+
