@@ -415,7 +415,7 @@ label.ck input:checked ~ .tx span{color:var(--stone)}
 const REV='2026.08.11';
 
 /* ══ 상태 ══ */
-const S = { type:null, injury:null, scale:null, when:null, fire119:null, svc:null, prod:null, work:null, ord:null, side:null, drill:null, spread:null, target:null, found:null, harm:null, elapsed:null, route:null, flags:[], org:[] };
+const S = { type:null, injury:null, scale:null, when:null, fire119:null, svc:null, felapsed:null, hist:[], prod:null, work:null, ord:null, side:null, drill:null, spread:null, target:null, found:null, harm:null, elapsed:null, route:null, flags:[], org:[] };
 let stack = [], node = 'type';
 
 /* ══ 질문 ══ */
@@ -467,6 +467,25 @@ const Q = {
     opts:[
       { v:"pre",  t:"서비스 방문 전" },
       { v:"post", t:"서비스 방문 후" },
+    ], next:()=>"felapsed"
+  },
+  felapsed: {
+    q:"설치 후 얼마나 지났나요?", s:"설치 시점과 화재 발생 사이의 간격이 판단에 사용됩니다.", key:"felapsed",
+    opts:[
+      { v:"y1",  t:"1년 이내" },
+      { v:"y3",  t:"1년 ~ 3년" },
+      { v:"y3p", t:"3년 초과" },
+      { v:"?",   t:"확인되지 않음", d:"설치일이 확인되지 않는 경우" },
+    ], next:()=>"hist"
+  },
+  hist: {
+    q:"설치 후 이런 일이 있었나요?", s:"고객에게 확인한 대로 선택해주세요.", key:"hist", multi:true,
+    opts:[
+      { v:"svc",  t:"서비스 방문 · 수리" },
+      { v:"elec", t:"세대 전기공사 · 리모델링" },
+      { v:"move", t:"이전설치 · 재설치" },
+      { v:"none", t:"해당 없음" },
+      { v:"?",    t:"확인되지 않음" },
     ], next:()=>"flags"
   },
   prod: {
@@ -586,7 +605,7 @@ const Q = {
   },
 };
 function order(){
-  if(S.type==="fire") return ["type","injury"].concat(S.injury==="y"?["harm"]:[]).concat(["scale","when","svc","flags"]).concat((S.flags||[]).includes("third")?["org"]:[]);
+  if(S.type==="fire") return ["type","injury"].concat(S.injury==="y"?["harm"]:[]).concat(["scale","when","svc","felapsed","hist","flags"]).concat((S.flags||[]).includes("third")?["org"]:[]);
   const ex=(S.flags||[]).includes("third")?["org"]:[];
   if(S.type==="body") return ["type","harm","flags"].concat(ex);
   if(S.type==="break") return ["type","target","found","flags"].concat(ex);
@@ -612,6 +631,8 @@ const SHOTS_F = [
   ]},
   { g:"주변 상태 · 증거물", must:true, items:[
     { t:"실외기 주변에 쌓인 물건 · 통풍 상태", d:"실외기실 루버가 열려 있는지 닫혀 있는지 함께" },
+    { t:"실외기실 밀폐 여부 · 열이 빠져나갈 공간", d:"창 · 루버 · 환기구가 있는지, 막혀 있는지" },
+    { t:"실외기 이격거리 · 같은 실외기실 내 대수", d:"벽면 · 다른 실외기와의 간격이 보이게" },
     { t:"멀티콘센트 사용 여부", d:"같은 콘센트에 꽂힌 다른 기기까지 함께" },
     { t:"같은 집에 설치된 에어컨 대수 · 불난 위치", d:"어느 방 · 어느 기기인지 확인되게" },
     { t:"타사 에어컨이 있는지", d:"있으면 제조사와 설치 위치까지" },
@@ -629,6 +650,16 @@ const SHOTS_F = [
     { t:"같은 경로를 지나는 다른 배선", d:"전등 · 통신 · 소방 배선" },
     { t:"에어컨 외에 탄 곳" },
     { t:"불이 번져나간 흔적", d:"그을음이 어느 방향으로 났는지 보이게" },
+  ]},
+  { g:"전기설비", items:[
+    { t:"분전반 · 차단기 상태", d:"내려가 있는지, 그을음이 있는지" },
+    { t:"에어컨 전용 차단기 유무 · 용량 표시" },
+    { t:"세대 전기공사 · 리모델링 흔적", d:"배선 교체 · 증설 자국" },
+  ]},
+  { g:"외부 요인", items:[
+    { t:"낙뢰 · 정전 여부", d:"고객 진술 그대로 기록" },
+    { t:"인접 세대 · 공용부 전기 이상 여부" },
+    { t:"옥외 배선 · 실외기 전원선 외부 노출 상태" },
   ]},
   { g:"사용 · 관리 상태", items:[
     { t:"전선이 눌리거나 꺾인 곳", d:"누르고 있는 가구 등이 함께 보이게" },
@@ -734,6 +765,10 @@ const SAY_F = [
     "설치하실 때 받으신 문자나 영수증이 남아 있으면 주문번호도 함께 알려주시겠습니까.",
     "제품 번호가 확인되지 않으면 주문하신 분 성함과 연락처로도 조회가 가능합니다.",
   ], no:"설치 이력 조회 목적으로만 말씀해주세요." },
+  { id:"fhist", when:"설치 후 이력 청취", lines:[
+    "설치하신 뒤에 서비스를 부르시거나 수리를 받으신 적이 있으신지요.",
+    "전기공사나 인테리어 공사를 하신 적이 있으시면 시기도 알려주시겠습니까.",
+  ], no:"들은 내용만 그대로 기록해주세요. 원인과 연결한 설명은 하지 않습니다.", fhist:true },
   { id:"remain", when:"원인 확인용 증거물 확인", lines:[
     "타거나 남은 전선 · 부품이 어디에 있는지 확인하고 싶습니다. 소방에서 가져갔는지, 서비스 쪽에서 회수해 갔는지 알고 계신지요.",
   ], no:"어디에 있는지만 확인해주세요." },
@@ -1005,9 +1040,10 @@ function renderQ(){
     const v=b.dataset.v;
     if(d.multi){
       const a=S[d.key]||[];
-      if(v==='none') S[d.key]=a.includes('none')?[]:['none'];
+      const EX=['none','?'];
+      if(EX.includes(v)) S[d.key]=a.includes(v)?[]:[v];
       else{
-        const b=a.filter(x=>x!=='none');
+        const b=a.filter(x=>!EX.includes(x));
         S[d.key]=b.includes(v)?b.filter(x=>x!==v):b.concat([v]);
       }
       renderQ();
@@ -1056,6 +1092,8 @@ const T_DRILL={yes:"도면 확인함",none:"도면 없었음",nog:"요청했으�
 const T_SPREAD={1:"설치 주변 한정",2:"세대 내 확산",3:"아랫집 · 인접 세대 확산"};
 const T_SCALE={1:"소규모",2:"세대 내 확산",3:"인접 세대 확산"};
 const T_WHEN={self:"미신고 · 고객 자체 진화",rep:"소방 · 경찰 신고 건"};
+const T_FEL={y1:"1년 이내",y3:"1년 ~ 3년",y3p:"3년 초과","?":"설치일 미확인"};
+const T_HIST={svc:"서비스 방문 · 수리",elec:"세대 전기공사 · 리모델링",move:"이전설치 · 재설치",none:"해당 없음","?":"확인되지 않음"};
 const T_SVC={pre:"서비스 방문 전",post:"서비스 방문 후"};
 const T_HARM={none:"병원 이송 없음",hosp:"병원 이송",adm:"입원 · 수술 등 중상해"};
 const T_TARGET={bld:"건물",obj:"일반 대물",car:"차량"};
@@ -1127,6 +1165,16 @@ function buildFire(){
   const f=S.flags||[], wh=S.when, sv=S.svc, inj=(S.injury==='y');
   const B={alerts:[], now:'', shots:[], shotNotes:[], says:[], report:[]};
 
+  const hi=S.hist||[];
+  if(hi.includes('svc')) B.alerts.push({t:"서비스 이력이 있는 건",
+    d:"설치 이후 서비스가 제품을 취급한 건입니다. 방문 시기와 수리 내용을 고객에게 확인해 그대로 공유해주세요. 현장에서 원인을 판단하지 않습니다."});
+  if(hi.includes('elec')) B.alerts.push({t:"전기공사 이력이 있는 건",
+    d:"세대 전기공사 · 리모델링이 있었던 건입니다. 시기와 범위를 확인하고 분전반 · 배선 상태를 함께 촬영해주세요."});
+  if(hi.includes('move')) B.alerts.push({t:"이전설치 · 재설치 이력이 있는 건",
+    d:"당사 설치 건인지 전산 확인이 필요합니다. 이전설치 시기와 시공 주체를 고객에게 확인해 그대로 공유해주세요."});
+  if(S.felapsed==='y3'||S.felapsed==='y3p'||S.felapsed==='?')
+    B.alerts.push({t:"설치 후 시간이 지난 건",
+      d:"설치 시점과 화재 발생 사이에 간격이 있는 건입니다. 그 사이의 사용 환경과 이력을 함께 확인해주세요. 현장에서 설치 때문인지 아닌지를 단정하지 않습니다."});
   if(inj) B.alerts.push({t:"인명피해 건", d:"즉시 유선상으로 물류담당자 · 담당 LM에게 사고 사항을 공유한 후 후속 조사를 진행해주세요.", hard:true});
 
   let n='';
@@ -1136,6 +1184,8 @@ function buildFire(){
     row('','고객 인적사항 · 모델명 · 제조번호')]);
   n+=sub('확보')+box([
     row('1순위','실내기 명판의 모델명 · 제조번호','실외기는 타서 없어졌을 수 있음'),
+    (hi.includes('svc')?row('서비스 이력','방문 시기 · 수리 내용','고객 진술 그대로 기록'):''),
+    (hi.includes('elec')?row('전기공사 이력','시기 · 범위 · 시공 주체','고객 진술 그대로 기록'):''),
     (sv==='post'?row('서비스 방문 후 건','SM 촬영 자료 요청','현장이 정리되었을 수 있습니다. 통보 시점에 사진과 제조번호를 함께 요청해주세요'):''),
     row('대조용','주문자 성명 · 연락처','배우자 명의 포함'),
     row('가능한 경우','설치 주문번호','고객 보유 문자 · 영수증에서 확인되면 조회가 빠름'),
@@ -1152,6 +1202,7 @@ function buildFire(){
   });
 
   B.says=SAY_F.filter(s=>{
+    if(s.fhist) return hi.includes('svc')||hi.includes('elec')||hi.includes('move')||S.felapsed==='y3'||S.felapsed==='y3p'||S.felapsed==='?';
     if(s.flag) return f.includes(s.flag);
     if(s.inj) return inj;
     if(s.noInj&&inj) return false;
@@ -1387,7 +1438,9 @@ function chips(){
   if(S.type==='fire'){
     c.push(['규모', T_SCALE[S.scale]]);
     c.push(['인명피해', S.injury==='y' ? (T_HARM[S.harm]||'있음') : '없음']);
-    c.push(['신고 여부', T_WHEN[S.when]], ['서비스 방문', T_SVC[S.svc]]);
+    c.push(['신고 여부', T_WHEN[S.when]], ['서비스 방문', T_SVC[S.svc]],
+      ['설치 후 경과', T_FEL[S.felapsed]],
+      ['설치 후 이력', (S.hist||[]).map(x=>T_HIST[x]).filter(Boolean).join(' · ')||'해당 없음']);
   } else if(S.type==='water'){
     c.push(['제품 · 작업', T_PROD[S.prod]+(S.prod==='work'&&T_WORK[S.work]?' · '+T_WORK[S.work]:'')]);
     if(S.prod==='work') c.push(['주문 연계', {y:'주문 포함',n:'단독 작업','?':'미확인'}[S.ord]]);
@@ -1448,6 +1501,7 @@ const ACT={
   photo:"촬영 전 양해를 구합니다",
   no:"제품 번호 · 주문번호 · 연락처를 확보합니다",
   remain:"원인 확인용 증거물이 어디에 있는지 확인합니다",
+  fhist:"설치 이후 이력을 청취합니다",
   ins:"화재보험 청구 절차를 안내합니다",
   end:"확인한 내용을 정리하고 마무리합니다",
   stop:"밸브를 잠그고 조치 전 상태를 촬영합니다",
@@ -1466,7 +1520,7 @@ const ACT={
   fix2:"공용부 조치 주체를 확인합니다"
 };
 const SEQ={
-  fire:["intro","injury","p_inv","p_self","photo","no","remain","ins","end"],
+  fire:["intro","injury","p_inv","p_self","photo","no","fhist","remain","ins","end"],
   water:["intro","stop","repro","fix","back","mgmt","fix2","no","hist","down","liab","end"],
   break:["intro","photo","late","end"],
   body:["first","move","info","photo","wit","end"]
@@ -1736,7 +1790,7 @@ function askReset(){
   w.onclick=e=>{ if(e.target===w) close(); };
   w.querySelector('.ask-yes').onclick=()=>{
     close();
-    Object.keys(S).forEach(k=>S[k]=(k==='flags'||k==='org')?[]:null);
+    Object.keys(S).forEach(k=>S[k]=(k==='flags'||k==='org'||k==='hist')?[]:null);
     CK={}; saveCK(); TAB='now'; stack=[]; node='type'; render();
   };
 }
